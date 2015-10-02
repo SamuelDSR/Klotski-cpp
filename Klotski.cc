@@ -2,10 +2,49 @@
 #include <unordered_set>
 #include <vector>
 #include <iostream>
-
-#include <string>
+#include <cstring>
+using namespace std;
 
 enum class Stype:int {dot=1,hbar,vbar,square};
+
+template <class _Tp>  
+struct my_equal_to : public binary_function<_Tp, _Tp, bool>  
+{  
+    bool operator()(const _Tp& __x, const _Tp& __y) const  
+    { return strcmp( __x, __y ) == 0; }  
+};
+
+struct Hash_Func{
+    //BKDR hash algorithm
+    /*
+     *size_t operator()(char * str) const
+     *{
+     *    size_t seed = 131;//31  131 1313 13131131313 etc//
+     *    size_t hash = 0;
+     *    while(*str)
+     *    {
+     *        hash = (hash * seed) + (*str);
+     *        str++;
+     *    }
+     *    return hash & (0x7FFFFFFF);
+     *}
+     */
+
+    size_t operator()(char* str) const
+    {
+        size_t hash = 5381;
+        int c;
+        while (c=*str++)
+        {
+          hash = ((hash<<5)+hash) + c;
+          //hash = hash*33^c;
+        }
+        return hash & (0x7FFFFFFF);
+    }
+};
+
+typedef unordered_set<char*,Hash_Func,my_equal_to<char*>> my_unordered_set;
+
 class Shape
 {
 public:
@@ -30,10 +69,13 @@ public:
 
 };
 
+const int Shape::bottom_offset[4] = { 0, 0, 1, 1 };
+const int Shape::right_offset[4] = { 0, 1, 0, 1 };
+
 class State
 {
 public:
-  State (char * _str, int _step=0)
+  State (const char * _str, int _step=0)
   {
     parsemark(_str);
     step = _step;
@@ -68,7 +110,7 @@ public:
     mask[x*cols+y] = value;
   };
 
-  std::string tomask(){
+  char* tomask(){
     char* mask = new char[bsize];
     memset(mask,'0',bsize*sizeof(char));
     for(const auto& s:_shapes){
@@ -96,7 +138,7 @@ public:
 		default:;
       }
     }
-    return std::string(mask);
+    return mask;
   };
 
   template<typename FUNC>
@@ -104,7 +146,7 @@ public:
   {
     //static_assert(std::is_convertible<FUNC, std::function<void(const State&)>>::value,
                   //"func must be callable with a 'const State&' parameter.");
-	const char* mask = (tomask()).c_str();
+	const char* mask = tomask();
     for(unsigned int i=0; i<_shapes.size();i++){
       // try to move up
       auto & s = _shapes[i];
@@ -140,14 +182,14 @@ public:
         State next = *this;
         next.parent = this;
         next.step++;
-        next._shapes[i].left--;
+        next._shapes[i].left++;
         func(next);
       }
     }
 
   };
   
-  bool parsemark(char* _str){
+  bool parsemark(const char* _str){
     int status[bsize] = {0};
     for(int i=0;i<bsize;i++){
       if(status[i]==0 && _str[i]!='0'){
@@ -186,17 +228,29 @@ public:
 
 };
 
-const int Shape::bottom_offset[4] = { 0, 0, 1, 1 };
-const int Shape::right_offset[4] = { 0, 1, 0, 1 };
 int State::squareindex=-1;
 
 int main(int argc, char *argv[])
 {
-  std::unordered_set<std::string> seen;
+  my_unordered_set seen;
   std::deque<State> steps;
   //std::stack<State*> solution;
 
-  auto game = State("VSSVVSSVVHHVVDDVD00D");
+  /*
+   *string str = "VSSVVSSVVHHVVDDVD00D";
+   *string str = "VV0VVV0VDSSDDSSDHHHH";
+   *const char* gamestr = str.c_str();
+   */
+
+  char *gamestr = new char[20];
+  cout<<"Please input the initial game"<<endl;
+  cin>>gamestr;
+  cout<<"Initial Game:"<<gamestr<<endl;
+  cout<<"Press Enter to continue"<<endl;
+  cin.clear();
+  cin.get();
+
+  auto game = State(gamestr);
   steps.push_back(game);
   seen.insert(game.tomask());
 
@@ -204,6 +258,7 @@ int main(int argc, char *argv[])
     State curr = steps.front();
     steps.pop_front();
 
+    //cout<<"SquareIndex:"<<State::squareindex<<endl;
     if(curr.issolved()){
       std::cout<<"Optimal steps:"<<curr.step<<std::endl;
       /*
@@ -213,7 +268,7 @@ int main(int argc, char *argv[])
        *  currptr = currptr->parent;
        *}
        */
-      break;
+      return 1;
     }
 
     curr.nextmoves([&seen, &steps](State& next) {
